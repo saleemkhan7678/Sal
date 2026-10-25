@@ -7,6 +7,9 @@ jobs:
   build:
     # Ubuntu 24.04 images ship the Android SDK (ANDROID_HOME) with platform 34 and build-tools preinstalled.
     runs-on: ubuntu-24.04
+    env:
+      KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -14,14 +17,31 @@ jobs:
           distribution: temurin
           java-version: 17
       - name: Point Gradle at the Android SDK
-        run: |
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
-          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.7
+
+      # Test build (throwaway key). Fine for testing, never arm with it.
       - run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: FocusLock-APK
+          name: FocusLock-TEST
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # Final build, signed with your permanent key from the repository secrets.
+      - name: Build signed release
+        if: env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > focuslock.jks
+          printf 'storeFile=focuslock.jks\nstorePassword=%s\nkeyAlias=focuslock\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > keystore.properties
+          gradle assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk FocusLock-FINAL.apk
+          "$ANDROID_HOME"/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner verify --print-certs FocusLock-FINAL.apk | grep SHA-256
+          rm -f focuslock.jks keystore.properties
+      - uses: actions/upload-artifact@v4
+        if: env.KEYSTORE_B64 != ''
+        with:
+          name: FocusLock-FINAL
+          path: FocusLock-FINAL.apk

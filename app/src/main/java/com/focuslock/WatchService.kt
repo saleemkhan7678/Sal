@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.database.ContentObserver
+import android.provider.Settings
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -28,6 +30,13 @@ class WatchService : Service() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
+
+    // Re-checks at once when accessibility services change (e.g. the Shorts blocker being switched off).
+    private val a11yObserver = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean) {
+            Enforcer.enforce(this@WatchService)
+        }
+    }
     private val tick = object : Runnable {
         override fun run() {
             if (fastTick) Enforcer.enforce(this@WatchService)
@@ -70,6 +79,9 @@ class WatchService : Service() {
                 registerReceiver(receiver, f)
             }
         }
+        contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, a11yObserver
+        )
         handler.postDelayed(tick, TICK_MS)
         running = true
     }
@@ -81,6 +93,7 @@ class WatchService : Service() {
     override fun onDestroy() {
         running = false
         handler.removeCallbacks(tick)
+        try { contentResolver.unregisterContentObserver(a11yObserver) } catch (e: Exception) { }
         try { unregisterReceiver(receiver) } catch (e: Exception) { }
         super.onDestroy()
     }

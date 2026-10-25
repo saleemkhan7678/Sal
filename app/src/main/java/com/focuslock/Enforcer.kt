@@ -151,6 +151,7 @@ object Enforcer {
         val store = Store(c)
         val now = System.currentTimeMillis()
         store.promotePending(now)
+        store.promoteShorts(now)
         Scheduler.ensureJob(c)
         if (!isOwner(c)) return
         WatchService.ensure(c)
@@ -181,9 +182,15 @@ object Enforcer {
                 }
             }
         }
-        apply(c, store, cfg, toSuspend)
+        // YouTube Shorts: the ShortsBlocker accessibility service closes Shorts inside the app.
+        // Fail closed: if that service is switched off, the whole YouTube app is suspended until it is back on.
+        val shorts = store.shortsOn
+        if (shorts && !ShortsBlocker.isEnabled(c)) toSuspend.addAll(ShortsBlocker.YOUTUBE)
+
+        apply(c, store, cfg, toSuspend, shorts)
 
         var next = Long.MAX_VALUE
+        if (store.shortsOffAt > now) next = minOf(next, store.shortsOffAt)
         for (u in store.locks.values) if (u > now) next = minOf(next, u)
         if (store.gamesLockUntil > now) next = minOf(next, store.gamesLockUntil)
         if (store.pending != null && store.pendingAt > now) next = minOf(next, store.pendingAt)
@@ -194,12 +201,14 @@ object Enforcer {
         if (next != Long.MAX_VALUE) Scheduler.alarmAt(c, next + 1000L)
     }
 
-    private fun apply(c: Context, store: Store, cfg: Config, wanted: Set<String>) {
+    private fun apply(c: Context, store: Store, cfg: Config, wanted: Set<String>, shorts: Boolean) {
         val d = dpm(c)
         val a = admin(c)
 
         val domains = HashSet<String>()
         for (p in wanted) WEB[p]?.let { domains.addAll(it) }
+        // Chrome URL filters match path prefixes and every subdomain (www., m.), so this closes Shorts on the web.
+        if (shorts) domains.add("youtube.com/shorts")
 
         val sus = HashSet<String>(wanted)
         // Websites are closed through Chrome/Edge policy; every other browser is suspended so it can't be a way around.

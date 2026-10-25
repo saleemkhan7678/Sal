@@ -75,6 +75,24 @@ class Store(context: Context) {
         }
     }
 
+    // ---- YouTube Shorts blocking: on at once, off only 24 h after asking. ----
+    val shortsOn: Boolean get() = p.getBoolean("shortsOn", false)
+
+    /** When a requested "off" takes effect (0 = no request). */
+    val shortsOffAt: Long get() = p.getLong("shortsOffAt", 0L)
+
+    fun shortsTurnOn() {
+        p.edit().putBoolean("shortsOn", true).remove("shortsOffAt").apply()
+    }
+
+    fun shortsRequestOff(now: Long) {
+        if (shortsOn && shortsOffAt == 0L) p.edit().putLong("shortsOffAt", now + DELAY_MS).apply()
+    }
+
+    fun promoteShorts(now: Long) {
+        if (shortsOn && shortsOffAt in 1..now) p.edit().putBoolean("shortsOn", false).remove("shortsOffAt").apply()
+    }
+
     companion object {
         const val DELAY_MS = 24L * 60 * 60 * 1000
     }

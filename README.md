@@ -32,6 +32,13 @@ Build > Generate Signed Bundle / APK (or `./gradlew assembleRelease`), install i
 - **Working hours:** automatic blocking with an optional daily limit. Weakening it takes 24 hours.
 - Uninstalling and reinstalling a locked app or game does not help: a background watcher re-suspends it the moment it is installed.
 
+## YouTube Shorts
+Turn on "Block Shorts". Then enable **FocusLock Shorts blocker** in Settings > Accessibility (or, if the switch is greyed out:
+`adb shell settings put secure enabled_accessibility_services com.focuslock/.ShortsBlocker` and
+`adb shell settings put secure accessibility_enabled 1`). Shorts are closed the moment they open; youtube.com/shorts is
+blocked in Chrome. If the accessibility service is switched off, the whole YouTube app is blocked until it is back on.
+Turning Shorts blocking off takes 24 hours. While it is on, browsers other than Chrome/Edge are suspended.
+
 ## Optional partner unlock
 Set `Secrets.PARTNER_SHA256` (Config.kt) to the SHA-256 of a code only a friend knows. Leave empty for no way out.
 

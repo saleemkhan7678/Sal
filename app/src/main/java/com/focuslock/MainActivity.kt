@@ -127,7 +127,7 @@ class MainActivity : Activity() {
     private fun screenState(): String {
         val now = System.currentTimeMillis()
         return "${Enforcer.isOwner(this)}|${store.armed}|${store.anyLockActive(now)}|${store.config.isActive(now)}|" +
-            store.locks.count { it.value > now }
+            store.locks.count { it.value > now } + "|${store.shortsOn}|${store.shortsOffAt}|${ShortsBlocker.isEnabled(this)}"
     }
 
     private fun nextUnlock(now: Long): Long? {
@@ -200,6 +200,7 @@ class MainActivity : Activity() {
         }
         if (locked) activeLocksCard()
         lockCard()
+        shortsCard()
         hoursCard()
         if (!store.armed) setupCard()
         root.addView(
@@ -366,6 +367,58 @@ class MainActivity : Activity() {
     private fun padded(v: View): LinearLayout = ui.column().apply {
         setPadding(ui.dp(22), ui.dp(4), ui.dp(22), 0)
         addView(v)
+    }
+
+    private fun shortsCard() {
+        val now = System.currentTimeMillis()
+        val c = ui.card(root)
+        c.addView(ui.title("YouTube Shorts"))
+        val on = store.shortsOn
+        val offAt = store.shortsOffAt
+        val sub = when {
+            on && offAt > now -> "Turns off ${fmt(offAt)}"
+            on -> "Shorts close as soon as they open. Normal videos still work."
+            else -> "Block Shorts in the YouTube app and on youtube.com"
+        }
+        c.addView(ui.switchRow("Block Shorts", sub, on && offAt == 0L) { want ->
+            if (want) {
+                store.shortsTurnOn()
+                Enforcer.enforce(this)
+                render()
+            } else {
+                dialog()
+                    .setTitle("Turn off Shorts blocking?")
+                    .setMessage("Shorts blocking stays on for 24 more hours, then turns off. You can switch it back on any time to cancel.")
+                    .setPositiveButton("Turn off in 24 h") { _, _ ->
+                        store.shortsRequestOff(System.currentTimeMillis())
+                        Enforcer.enforce(this)
+                        render()
+                    }
+                    .setNegativeButton("Keep it on") { _, _ -> render() }
+                    .setOnCancelListener { render() }
+                    .show()
+            }
+        })
+        if (on && !ShortsBlocker.isEnabled(this)) {
+            c.addView(ui.text(
+                "The whole YouTube app is blocked until the Shorts blocker is switched on in Accessibility settings.",
+                13f, p.danger
+            ), ui.lp(top = 6))
+            c.addView(ui.button("Open accessibility settings", Ui.Style.SECONDARY) {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }, ui.lp(top = 10))
+            c.addView(ui.text("If the switch is greyed out, run this from your computer instead:", 12f, p.muted), ui.lp(top = 10))
+            c.addView(ui.text(
+                "adb shell settings put secure enabled_accessibility_services com.focuslock/.ShortsBlocker\n" +
+                    "adb shell settings put secure accessibility_enabled 1",
+                12f, p.accent
+            ).apply {
+                typeface = android.graphics.Typeface.MONOSPACE
+                setTextIsSelectable(true)
+                background = ui.shape(p.raised, 12)
+                setPadding(ui.dp(12), ui.dp(12), ui.dp(12), ui.dp(12))
+            }, ui.lp(top = 6))
+        }
     }
 
     private fun hoursCard() {

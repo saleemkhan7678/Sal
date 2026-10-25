@@ -40,7 +40,7 @@ class WatchService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("watch", "FocusLock", NotificationManager.IMPORTANCE_MIN))
         val n = Notification.Builder(this, "watch")
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setSmallIcon(R.drawable.ic_stat_lock)
             .setContentTitle("FocusLock is active")
             .setOngoing(true)
             .build()
